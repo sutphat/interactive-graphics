@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Raster Graphics Paint</title>
+
+<style>
+  body {
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #584e4e6d;
+    margin: 20px;
+  }
+
+ 
+  .main-container {
+    display: flex;
+    flex-direction: row;
+    gap: 15px;
+    align-items: flex-start;
+  }
+
+
+  .toolbar-left {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #fff;
+    padding: 15px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  }
+
+  .toolbar-left button {
+    padding: 8px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    background: #f9f9f9;
+    text-align: left;
+    transition: background 0.2s;
+  }
+
+  .toolbar-left button:hover {
+    background: #e0e0e0;
+  }
+
+  .brush-size-container {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 10px;
+    font-size: 14px;
+  }
+
+
+  #canvas {
+    border: 1px solid #000;
+    image-rendering: pixelated;
+    background-color: white;
+  }
+
+ 
+  .color-palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    max-width: 500px;
+    margin-top: 15px;
+    background: #fff;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  }
+
+  .color-btn {
+    width: 35px;
+    height: 35px;
+    border: 2px solid #333;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+
+  .color-btn:hover {
+    transform: scale(1.1);
+  }
+
+  /* สีต่างๆ */
+  .red { background: red; }
+  .green { background: green; }
+  .blue { background: blue; }
+  .black { background: black; }
+  .yellow { background: yellow; }
+  .orange { background: orange; }
+  .purple { background: purple; }
+  .pink { background: pink; }
+  .cyan { background: cyan; }
+  .gray { background: gray; }
+  .brown { background: #8B4513; }
+  .white { background: white; }
+</style>
+
+</head>
+
+<body>
+
+
+  <div class="main-container">
+    
+   
+    <div class="toolbar-left">
+      <strong>เครื่องมือ</strong>
+      <button onclick="setTool('pencil')">✏️ ดินสอ</button>
+      <button onclick="setTool('eraser')">🧽 ยางลบ</button>
+      <button onclick="setTool('line')">📏 เส้นตรง</button>
+      <button onclick="setTool('rect')">⬜ สี่เหลี่ยม</button>
+      <button onclick="setTool('circle')">⭕ วงกลม</button>
+      <a href="index.html">
+    <button>⬅ กลับหน้า CV</button>
+</a>
+
+      <hr style="width: 100%; border: 0.5px solid #eee; margin: 5px 0;">
+
+      <div class="brush-size-container">
+        <label for="brushSize">ขนาดเส้น: <span id="sizeText">1</span> px</label>
+        <input type="range" id="brushSize" min="1" max="20" value="1">
+      </div>
+    </div>
+
+    
+    <canvas id="canvas" width="300" height="300" style="width:500px; height:500px;"></canvas>
+
+  </div>
+
+
+  <div class="color-palette">
+    <button class="color-btn red" onclick="setColor(255,0,0)"></button>
+    <button class="color-btn green" onclick="setColor(0,255,0)"></button>
+    <button class="color-btn blue" onclick="setColor(0,0,255)"></button>
+    <button class="color-btn black" onclick="setColor(0,0,0)"></button>
+    <button class="color-btn yellow" onclick="setColor(255,255,0)"></button>
+    <button class="color-btn orange" onclick="setColor(255,128,0)"></button>
+    <button class="color-btn purple" onclick="setColor(128,0,255)"></button>
+    <button class="color-btn pink" onclick="setColor(255,192,203)"></button>
+    <button class="color-btn cyan" onclick="setColor(0,255,255)"></button>
+    <button class="color-btn gray" onclick="setColor(128,128,128)"></button>
+    <button class="color-btn brown" onclick="setColor(139,69,19)"></button>
+    <button class="color-btn white" onclick="setColor(255,255,255)"></button>
+  </div>
+
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const imageData = ctx.createImageData(
+    canvas.width,
+    canvas.height
+);
+
+const pixels = imageData.data;
+
+let r = 0;
+let g = 0;
+let b = 0;
+
+function setColor(red, green, blue) {
+    r = red;
+    g = green;
+    b = blue;
+}
+
+let brushSize = 1;
+
+document.getElementById("brushSize").oninput = function() {
+    brushSize = Number(this.value);
+    document.getElementById("sizeText").innerHTML = brushSize;
+}
+
+let tool = "pencil";
+
+function setTool(name) {
+    tool = name;
+}
+
+function putPixel(x, y, r, g, b) {
+    for (let i = -brushSize; i <= brushSize; i++) {
+        for (let j = -brushSize; j <= brushSize; j++) {
+            let nx = x + i;
+            let ny = y + j;
+
+            if (nx >= 0 && nx < canvas.width && ny >= 0 && ny < canvas.height) {
+                let index = (ny * canvas.width + nx) * 4;
+
+                pixels[index] = r;
+                pixels[index + 1] = g;
+                pixels[index + 2] = b;
+                pixels[index + 3] = 255;
+            }
+        }
+    }
+}
+
+
+function drawLine(x1, y1, x2, y2, r, g, b) {
+    let step = Math.max(
+        Math.abs(x2 - x1),
+        Math.abs(y2 - y1)
+    );
+
+    for (let i = 0; i <= step; i++) {
+        let x = Math.round(x1 + (x2 - x1) * i / step);
+        let y = Math.round(y1 + (y2 - y1) * i / step);
+
+        putPixel(x, y, r, g, b);
+    }
+}
+
+
+function drawRect(x1, y1, x2, y2, r, g, b) {
+    drawLine(x1, y1, x2, y1, r, g, b);
+    drawLine(x2, y1, x2, y2, r, g, b);
+    drawLine(x2, y2, x1, y2, r, g, b);
+    drawLine(x1, y2, x1, y1, r, g, b);
+}
+
+
+function drawCircle(cx, cy, x2, y2, r, g, b) {
+    let radius = Math.sqrt(
+        (x2 - cx) * (x2 - cx) +
+        (y2 - cy) * (y2 - cy)
+    );
+
+    for (let angle = 0; angle < 360; angle++) {
+        let rad = angle * Math.PI / 180;
+        let x = Math.round(cx + radius * Math.cos(rad));
+        let y = Math.round(cy + radius * Math.sin(rad));
+
+        putPixel(x, y, r, g, b);
+    }
+}
+
+
+function getMouse(e) {
+    let rect = canvas.getBoundingClientRect();
+
+    return {
+        x: Math.floor((e.clientX - rect.left) * canvas.width / rect.width),
+        y: Math.floor((e.clientY - rect.top) * canvas.height / rect.height)
+    };
+}
+
+
+let drawing = false;
+let startX = 0;
+let startY = 0;
+let oldX = 0;
+let oldY = 0;
+let tempImage;
+
+
+canvas.addEventListener("mousedown", function(e) {
+    let pos = getMouse(e);
+
+    drawing = true;
+    startX = pos.x;
+    startY = pos.y;
+    oldX = pos.x;
+    oldY = pos.y;
+
+    tempImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    if (tool == "pencil" || tool == "eraser") {
+        if (tool == "eraser") {
+            putPixel(pos.x, pos.y, 255, 255, 255);
+        } else {
+            putPixel(pos.x, pos.y, r, g, b);
+        }
+        ctx.putImageData(imageData, 0, 0);
+    }
+});
+
+
+canvas.addEventListener("mousemove", function(e) {
+    if (!drawing) return;
+
+    let pos = getMouse(e);
+
+    if (tool == "pencil") {
+        drawLine(oldX, oldY, pos.x, pos.y, r, g, b);
+        ctx.putImageData(imageData, 0, 0);
+    }
+
+    if (tool == "eraser") {
+        drawLine(oldX, oldY, pos.x, pos.y, 255, 255, 255);
+        ctx.putImageData(imageData, 0, 0);
+    }
+
+    if (tool == "line" || tool == "rect" || tool == "circle") {
+        ctx.putImageData(tempImage, 0, 0);
+        ctx.beginPath();
+
+        if (tool == "line") {
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(pos.x, pos.y);
+        }
+
+        if (tool == "rect") {
+            ctx.rect(startX, startY, pos.x - startX, pos.y - startY);
+        }
+
+        if (tool == "circle") {
+            let radius = Math.sqrt(
+                (pos.x - startX) * (pos.x - startX) +
+                (pos.y - startY) * (pos.y - startY)
+            );
+            ctx.arc(startX, startY, radius, 0, Math.PI * 2);
+        }
+
+        ctx.stroke();
+    }
+
+    oldX = pos.x;
+    oldY = pos.y;
+});
+
+
+canvas.addEventListener("mouseup", function(e) {
+    if (!drawing) return;
+
+    let pos = getMouse(e);
+
+    if (tool == "line") {
+        drawLine(startX, startY, pos.x, pos.y, r, g, b);
+    }
+
+    if (tool == "rect") {
+        drawRect(startX, startY, pos.x, pos.y, r, g, b);
+    }
+
+    if (tool == "circle") {
+        drawCircle(startX, startY, pos.x, pos.y, r, g, b);
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    drawing = false;
+});
+
+
+canvas.addEventListener("mouseleave", function() {
+    drawing = false;
+});
+
+
+ctx.putImageData(imageData, 0, 0);
+</script>
+
+</body>
+</html>
