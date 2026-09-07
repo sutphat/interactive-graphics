@@ -215,8 +215,7 @@
                 });
             });
         }
-
-        function load3DModel() {
+function load3DModel() {
             MeshoptDecoder.ready.then(() => {
                 const loader = new THREE.GLTFLoader();
                 loader.setMeshoptDecoder(MeshoptDecoder);
@@ -230,12 +229,27 @@
                         if (child.isMesh) {
                             child.castShadow = true;
                             child.receiveShadow = true;
-                            if (child.material && !characterMaterials.includes(child.material)) {
-                                characterMaterials.push(child.material);
+
+                            if (child.material) {
+                                
+                                child.material.metalnessMap = null;
+                                child.material.roughnessMap = null;
+                                
+                                // ตั้งค่าให้เป็นโลหะเงาวับเหมือนกระจกเพื่อโชว์ HDRI
+                                child.material.metalness = 1.0;          
+                                child.material.roughness = 0.05;         
+                                child.material.envMapIntensity = 2.5;    
+                                
+                                child.material.needsUpdate = true;
+
+                                if (!characterMaterials.includes(child.material)) {
+                                    characterMaterials.push(child.material);
+                                }
                             }
                         }
                     });
 
+                    model.scale.set(2.5, 2.5, 2.5);
                     model.position.set(0, 0, 0);
                     model.rotation.y = -Math.PI / 2;
                     scene.add(model);
