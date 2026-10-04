@@ -378,7 +378,7 @@ MeshoptDecoder.ready.then(()=>{
 
         // Cel Shading
         const celMaterial = new THREE.MeshToonMaterial({
-            color: 0xffd700,
+            color: 0x1a365d,
             gradientMap: createToonGradient()
         });
 
@@ -456,7 +456,7 @@ function onPick(e) {
         .normalize();
 
     // กำหนดระยะห่างกล้องจากจอ
-    const distance = 2.5;
+    const distance = 4.5;
 
     // สั่งกล้องซูมเข้าไปยังจอ
     camera.position.copy(
