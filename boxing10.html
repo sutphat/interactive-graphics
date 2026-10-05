@@ -293,6 +293,7 @@ let totalTime = 0;
 MeshoptDecoder.ready.then(()=>{
     const gltfLoader=new THREE.GLTFLoader();
     gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+  //ไฟล์หลัก
     const glbUrl="https://raw.githubusercontent.com/sutphat/interactive-graphics/main/box3.glb";
     gltfLoader.load(
         glbUrl,
@@ -314,7 +315,7 @@ MeshoptDecoder.ready.then(()=>{
             addTVScreens(model);
             attachPortfolioToTV4(model);
             create3DProfileText(model,size.y);
-
+            //นักมวย1-2
             const boxerUrl1="https://raw.githubusercontent.com/sutphat/interactive-graphics/main/boxing4.glb";
             const boxerUrl2="https://raw.githubusercontent.com/sutphat/interactive-graphics/main/boxing5.glb";
             
@@ -369,6 +370,7 @@ MeshoptDecoder.ready.then(()=>{
         undefined,
         error=>{console.error("Error loading file:",error);}
     );
+  //รูปหลายเหลี่ยม cel shading
   gltfLoader.load("https://raw.githubusercontent.com/sutphat/interactive-graphics/main/aaaaa.glb",
     (gltf) => {
         const model = gltf.scene;
