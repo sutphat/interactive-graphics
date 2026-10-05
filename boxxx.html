@@ -23,9 +23,8 @@
 <body>
 
 <script>
-// ==========================================
+
 // 1. การตั้งค่า WebGL Renderer (ตัววาดภาพ 3D)
-// ==========================================
 const renderer = new THREE.WebGLRenderer({ antialias: true }); // เปิด antialias เพื่อลบรอยหยักขอบวัตถุ
 renderer.setSize(window.innerWidth, window.innerHeight); // กำหนดขนาดตามขนาดหน้าจอ браузер
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // ปรับ Pixel Ratio ให้เหมาะกับจอแสดงผล
@@ -34,9 +33,8 @@ renderer.shadowMap.enabled = true; // เปิดใช้งานระบบ
 renderer.shadowMap.type = THREE.PCFSoftShadowMap; // ใช้ประเภทเงาแบบนุ่มนวล
 document.body.appendChild(renderer.domElement); // นำตัวเรนเดอร์ไปแปะลงในแท็ก <body>
 
-// ==========================================
 // 2. การสร้าง Scene (ฉาก) และ Camera (กล้อง)
-// ==========================================
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111111); // ตั้งสีพื้นหลังของฉากเป็นสีเทาดำ
 
@@ -54,9 +52,7 @@ const pickables = []; // อาร์เรย์เก็บวัตถุท�
 const raycaster = new THREE.Raycaster(); // ตัวยิงลำแสงตรวจจับพิกัด
 const pointer = new THREE.Vector2(); // เก็บพิกัดเมาส์ (-1 ถึง 1)
 
-// ==========================================
 // 3. การจัดแสงพื้นฐาน (Basic Lighting)
-// ==========================================
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); // แสงสว่างรอบทิศทาง (ช่วยให้ไม่มืดสนิท)
 scene.add(ambientLight);
 
@@ -69,9 +65,7 @@ const fillLight = new THREE.DirectionalLight(0xffffff, 0.2); // แสงเส�
 fillLight.position.set(-5, 6, -5);
 scene.add(fillLight);
 
-// ==========================================
-// 4. Custom Shader สำหรับธงชาติไทยพริ้วไหว
-// ==========================================
+// 4. Custom Shader สำหรับธงชาติไทยพริ้วไหว=
 const flagUniforms = { uTime: { value: 0 } }; // ตัวแปรส่งค่าเวลาเข้า Shader
 const flagMaterial = new THREE.ShaderMaterial({
     uniforms: flagUniforms,
@@ -140,9 +134,8 @@ function createWavingFlag(x, y, z) {
 // เรียกใช้งานสร้างธงชาติไทยไว้ที่ข้างเวที
 createWavingFlag(-4, -8, -3);
 
-// ==========================================
+
 // 5. การสร้างอักษร 3D Profile
-// ==========================================
 function create3DProfileText(parentModel, sizeY){
     const fontLoader = new THREE.FontLoader();
     fontLoader.load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json', (font) => {
@@ -175,9 +168,7 @@ function create3DProfileText(parentModel, sizeY){
     });
 }
 
-// ==========================================
-// 6. ระบบสปอตไลต์รอบเวที (Stage Lights)
-// ==========================================
+// 6. ระบบสปอตไลต์รอบเวที 
 function addStageLights(model, size){
     const stageTarget = new THREE.Object3D();
     stageTarget.position.set(0, -size.y * 0.45, 0); // ตั้งเป้าหมายให้ไฟส่องสว่างลงมาที่พื้นเวที
@@ -214,9 +205,8 @@ function addStageLights(model, size){
     }
 }
 
-// ==========================================
+
 // 7. การสร้าง Video Texture บนจอ TV (TV 1-3)
-// ==========================================
 function addTVScreens(model){
     // จอ TV 1
     const video1 = document.createElement("video");
@@ -254,9 +244,7 @@ function addTVScreens(model){
     if(tv3Obj){ tv3Obj.traverse(child => { if(child.isMesh) child.material = tvMat3; }); }
 }
 
-// ==========================================
 // 8. การวาด Canvas Dynamic Texture (TV 4)
-// ==========================================
 function createTV4CanvasTexture(imgElement){
     const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 512;
     const ctx = canvas.getContext('2d');
@@ -341,9 +329,8 @@ function attachPortfolioToTV4(model){
     img.onerror = renderToScreen;
 }
 
-// ==========================================
+
 // 9. การโหลดโมเดล 3D (GLTF / GLB Loading)
-// ==========================================
 const clock = new THREE.Clock();
 let mixer1, action1, boxerModel1 = null;
 let boxerModel2 = null;
@@ -476,9 +463,8 @@ MeshoptDecoder.ready.then(() => {
     }
 });
 
-// ==========================================
+
 // 10. Animation Loop (ลูปเรนเดอร์ภาพเคลื่อนไหว)
-// ==========================================
 function animate(){
     requestAnimationFrame(animate); // สั่งอัปเดตเฟรมถัดไปเรื่อยๆ
     
@@ -493,9 +479,8 @@ function animate(){
 }
 animate(); // เริ่มลูปเรนเดอร์
 
-// ==========================================
+
 // 11. Event Listeners (หน้าจอ Resize & การคลิก)
-// ==========================================
 // ปรับอัตราส่วนกล้องและเรนเดอร์ตามขนาดหน้าต่างเบราว์เซอร์เมื่อถูก Resize
 window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
