@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<title>Boxing Stage with Thai Flag Shader</title>
+<title>Boxing Stage</title>
 <style>
   body {
     margin: 0;   
@@ -369,11 +369,11 @@ MeshoptDecoder.ready.then(()=>{
         undefined,
         error=>{console.error("Error loading file:",error);}
     );
-  gltfLoader.load("https://raw.githubusercontent.com/sutphat/interactive-graphics/main/aaaa.glb",
+  gltfLoader.load("https://raw.githubusercontent.com/sutphat/interactive-graphics/main/aaaaa.glb",
     (gltf) => {
         const model = gltf.scene;
-        model.scale.set(2, 2, 2);
-        model.position.set(4, -8, -4);
+        model.scale.set(1.5, 1.5, 1.5);
+        model.position.set(4, -7.3, -4);
         model.rotation.y = 0;
 
         // Cel Shading
