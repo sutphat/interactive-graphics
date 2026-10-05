@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Boxing Stage with Thai Flag Shader</title>
+<style>
+  body {
+    margin: 0;   
+    overflow: hidden;  /* ซ่อน Scrollbar ไม่ให้หน้าจอเลื่อน */
+    background: #111;
+    user-select: none; /* ป้องกันการคลุมดำข้อความบนหน้าจอ */
+  }
+</style>
+
+<!-- โหลดไลบรารี Three.js และตัวขยายต่างๆ (Loaders, Controls, Decoders) ผ่าน CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/meshoptimizer@0.18.1/meshopt_decoder.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FontLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/TextGeometry.js"></script>
+</head>
+<body>
+
+<script>
+// ==========================================
+// 1. การตั้งค่า WebGL Renderer (ตัววาดภาพ 3D)
+// ==========================================
+const renderer = new THREE.WebGLRenderer({ antialias: true }); // เปิด antialias เพื่อลบรอยหยักขอบวัตถุ
+renderer.setSize(window.innerWidth, window.innerHeight); // กำหนดขนาดตามขนาดหน้าจอ браузер
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // ปรับ Pixel Ratio ให้เหมาะกับจอแสดงผล
+renderer.outputEncoding = THREE.sRGBEncoding; // ใช้ระบบสี sRGB เพื่อความถูกต้องของสี
+renderer.shadowMap.enabled = true; // เปิดใช้งานระบบคำนวณเงา
+renderer.shadowMap.type = THREE.PCFSoftShadowMap; // ใช้ประเภทเงาแบบนุ่มนวล
+document.body.appendChild(renderer.domElement); // นำตัวเรนเดอร์ไปแปะลงในแท็ก <body>
+
+// ==========================================
+// 2. การสร้าง Scene (ฉาก) และ Camera (กล้อง)
+// ==========================================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111); // ตั้งสีพื้นหลังของฉากเป็นสีเทาดำ
+
+// กล้องมุมมอง Perspective (ระยะลึกตื้นสมจริง): FOV=45, Aspect Ratio, Near=0.1, Far=1000
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 5, 10); // ตั้งตำแหน่งกล้อง (X=0, Y=5, Z=10)
+
+// ระบบควบคุมกล้องด้วยเมาส์ (OrbitControls)
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; // เปิดความนุ่มนวลเวลาหมุนกล้อง (Damping)
+controls.dampingFactor = 0.05;
+
+// ตัวแปรสำหรับระบบตรวจจับการคลิกวัตถุ (Raycasting)
+const pickables = []; // อาร์เรย์เก็บวัตถุที่สามารถคลิกได้
+const raycaster = new THREE.Raycaster(); // ตัวยิงลำแสงตรวจจับพิกัด
+const pointer = new THREE.Vector2(); // เก็บพิกัดเมาส์ (-1 ถึง 1)
+
+// ==========================================
+// 3. การจัดแสงพื้นฐาน (Basic Lighting)
+// ==========================================
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); // แสงสว่างรอบทิศทาง (ช่วยให้ไม่มืดสนิท)
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); // แสงหลักทิศทางเดียว (เหมือนแสงอาทิตย์)
+dirLight.position.set(5, 12, 8);
+dirLight.castShadow = true; // ให้แสงนี้สร้างเงาได้
+scene.add(dirLight);
+
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.2); // แสงเสริมด้านลบ เพื่อลดความมืดของด้านหลังวัตถุ
+fillLight.position.set(-5, 6, -5);
+scene.add(fillLight);
+
+// ==========================================
+// 4. Custom Shader สำหรับธงชาติไทยพริ้วไหว
+// ==========================================
+const flagUniforms = { uTime: { value: 0 } }; // ตัวแปรส่งค่าเวลาเข้า Shader
+const flagMaterial = new THREE.ShaderMaterial({
+    uniforms: flagUniforms,
+    // Vertex Shader: คำนวณตำแหน่งจุดพิกัด 3D (ทำให้ธงเป็นคลื่น)
+    vertexShader: `
+        uniform float uTime;
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            vec3 newPosition = position;
+            // คำนวณคลื่นพริ้วไหวด้วยฟังก์ชัน Sine ตามตำแหน่ง X และเวลา uTime
+            // คูณด้วย uv.x เพื่อให้ขอบซ้าย (ติดเสา) อยู่นิ่ง และขอบขวาพริ้วไหว
+            float wave = sin(position.x * 3.0 + uTime * 5.0) * 0.25 * uv.x;
+            newPosition.z += wave;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+        }
+    `,
+    // Fragment Shader: คำนวณสีบนพื้นผิว (วาดแถบธงชาติไทย 5 แถบ)
+    fragmentShader: `
+        varying vec2 vUv;
+        void main() {
+            // คำนวณช่วงพิกัดแนวตั้ง (vUv.y) เพื่อตัดสีเป็นแถบ Red-White-Blue-White-Red
+            vec3 color = vec3(0.8, 0.1, 0.1); // แถบล่างสุด: สีแดง
+            
+            if(vUv.y > 0.166) {
+                color = vec3(1.0, 1.0, 1.0); // แถบที่ 2: สีขาว
+            }
+            if(vUv.y > 0.333 && vUv.y < 0.666) {
+                color = vec3(0.1, 0.15, 0.5); // แถบกลาง: สีน้ำเงิน (ความกว้างเป็น 2 เท่า)
+            }
+            if(vUv.y >= 0.666) {
+                color = vec3(1.0, 1.0, 1.0); // แถบที่ 4: สีขาว
+            }
+            if(vUv.y >= 0.833) {
+                color = vec3(0.8, 0.1, 0.1); // แถบบนสุด: สีแดง
+            }
+            
+            gl_FragColor = vec4(color, 1.0);
+        }
+    `,
+    side: THREE.DoubleSide // ให้มองเห็น Material ได้ทั้งสองด้าน
+});
+
+// ฟังก์ชันสร้างเสาและผืนธงชาติไทย
+function createWavingFlag(x, y, z) { 
+    const flagGroup = new THREE.Group(); 
+    
+    // สร้างเสาธงทรงกระบอก (Cylinder)
+    const poleGeo = new THREE.CylinderGeometry(0.05, 0.05, 5, 16); 
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8, roughness: 0.2 }); 
+    const pole = new THREE.Mesh(poleGeo, poleMat); 
+    pole.position.y = 2.5; 
+    flagGroup.add(pole); 
+      
+    // สร้างผืนธงระนาบ (Plane) พร้อมย้ายจุดหมุน (Pivot Point)
+    const flagGeo = new THREE.PlaneGeometry(2, 1.2, 30, 15);  
+    flagGeo.translate(1, 0, 0); // เลื่อนให้ขอบซ้ายอยู่ที่ X=0 ตรงกับเสาธงพอดี 
+    const flagMesh = new THREE.Mesh(flagGeo, flagMaterial);  
+    flagMesh.position.set(0, 4.2, 0);  
+    flagGroup.add(flagMesh);  
+  
+    flagGroup.position.set(x, y, z);  
+    scene.add(flagGroup);  
+} 
+
+// เรียกใช้งานสร้างธงชาติไทยไว้ที่ข้างเวที
+createWavingFlag(-4, -8, -3);
+
+// ==========================================
+// 5. การสร้างอักษร 3D Profile
+// ==========================================
+function create3DProfileText(parentModel, sizeY){
+    const fontLoader = new THREE.FontLoader();
+    fontLoader.load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+        const textMaterial = new THREE.MeshStandardMaterial({
+            color: 0xFFD54F,
+            metalness: 0.5,
+            roughness: 0.3
+        });
+        
+        // สร้าง Geometry ตัวอักษรแต่ละบรรทัด
+        const nameGeo = new THREE.TextGeometry('Sutphat Lapsirivong', { font: font, size: 0.6, height: 0.1, curveSegments: 12, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.015, bevelOffset: 0, bevelSegments: 3 });
+        const idGeo = new THREE.TextGeometry('ID: 6721601567', { font: font, size: 0.4, height: 0.07, curveSegments: 12, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.01, bevelOffset: 0, bevelSegments: 3 });
+        const MajorGeo = new THREE.TextGeometry('MAJOR: COMPUTER SCIENCE', { font: font, size: 0.4, height: 0.07, curveSegments: 12, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.01, bevelOffset: 0, bevelSegments: 3 });
+        const FACULTYGeo = new THREE.TextGeometry('FACULTY: Liberal Arts and Science', { font: font, size: 0.4, height: 0.07, curveSegments: 12, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.01, bevelOffset: 0, bevelSegments: 3 });
+        const UNIVERSITYGeo = new THREE.TextGeometry('UNIVERSITY: Kasetsart University (KPS)', { font: font, size: 0.4, height: 0.07, curveSegments: 12, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.01, bevelOffset: 0, bevelSegments: 3 });
+        
+        // จัดให้จุดศูนย์กลางข้อความอยู่ตรงกลาง Geometry
+        nameGeo.center(); idGeo.center(); MajorGeo.center(); FACULTYGeo.center(); UNIVERSITYGeo.center();
+        
+        // สร้าง Mesh และวางตำแหน่งไล่ระดับความสูงขึ้นไป
+        const nameMesh = new THREE.Mesh(nameGeo, textMaterial); nameMesh.position.set(0, sizeY * 0.8 + 8, 0); nameMesh.castShadow = true;
+        const idMesh = new THREE.Mesh(idGeo, textMaterial); idMesh.position.set(0, sizeY * 0.8 + 7, 0); idMesh.castShadow = true;
+        const MajorMesh = new THREE.Mesh(MajorGeo, textMaterial); MajorMesh.position.set(0, sizeY * 0.8 + 6, 0); MajorMesh.castShadow = true;
+        const FACULTYMesh = new THREE.Mesh(FACULTYGeo, textMaterial); FACULTYMesh.position.set(0, sizeY * 0.8 + 5, 0); FACULTYMesh.castShadow = true;
+        const UNIVERSITYMesh = new THREE.Mesh(UNIVERSITYGeo, textMaterial); UNIVERSITYMesh.position.set(0, sizeY * 0.8 + 4, 0); UNIVERSITYMesh.castShadow = true;
+        
+        const textGroup = new THREE.Group();
+        textGroup.add(nameMesh, idMesh, MajorMesh, FACULTYMesh, UNIVERSITYMesh);
+        parentModel.add(textGroup);
+    });
+}
+
+// ==========================================
+// 6. ระบบสปอตไลต์รอบเวที (Stage Lights)
+// ==========================================
+function addStageLights(model, size){
+    const stageTarget = new THREE.Object3D();
+    stageTarget.position.set(0, -size.y * 0.45, 0); // ตั้งเป้าหมายให้ไฟส่องสว่างลงมาที่พื้นเวที
+    model.add(stageTarget);
+
+    // วนลูปหาวัตถุชื่อ "Lighting1" ถึง "Lighting20" ในโมเดล
+    for(let i = 1; i <= 20; i++){
+        const bulb = model.getObjectByName("Lighting" + i);
+        if(!bulb) continue;
+
+        bulb.traverse(child => {
+            if(child.isMesh && child.material){
+                if(child.material.color) child.material.color.set(0x050505);
+                if(child.material.roughness !== undefined) child.material.roughness = 0.8;
+                child.material.needsUpdate = true;
+            }
+        });
+
+        // สร้าง SpotLight และส่องไปที่ stageTarget
+        const light = new THREE.SpotLight(0xffffff, 6, size.y * 2.5, Math.PI / 8, 0.5, 1);
+        light.position.set(0, 0, 0);
+        bulb.add(light);
+        light.target = stageTarget;
+        light.castShadow = false;
+
+        // ปรับให้ตัวโคมไฟมีการเปล่งแสงออกมา (Emissive)
+        bulb.traverse(child => {
+            if(child.isMesh && child.material && child.material.emissive){
+                child.material.emissive.set(0xffffcc);
+                child.material.emissiveIntensity = 3;
+                child.material.needsUpdate = true;
+            }
+        });
+    }
+}
+
+// ==========================================
+// 7. การสร้าง Video Texture บนจอ TV (TV 1-3)
+// ==========================================
+function addTVScreens(model){
+    // จอ TV 1
+    const video1 = document.createElement("video");
+    video1.src = "https://raw.githubusercontent.com/sutphat/interactive-graphics/main/testmodel3.mp4";
+    video1.loop = true; video1.muted = true; video1.playsInline = true; video1.crossOrigin = "anonymous";
+    video1.play().catch(() => { window.addEventListener("click", () => { video1.play(); }, { once: true }); });
+    const videoTexture1 = new THREE.VideoTexture(video1);
+    videoTexture1.encoding = THREE.sRGBEncoding; videoTexture1.wrapS = THREE.RepeatWrapping; videoTexture1.wrapT = THREE.RepeatWrapping;
+    videoTexture1.repeat.set(-1, -1); videoTexture1.center.set(0.5, 0.5);
+    const tvMat1 = new THREE.MeshBasicMaterial({ map: videoTexture1, toneMapped: false });
+    const tv1Obj = model.getObjectByName("tv1") || model.getObjectByName("TV1");
+    if(tv1Obj){ tv1Obj.traverse(child => { if(child.isMesh) child.material = tvMat1; }); }
+
+    // จอ TV 2
+    const video2 = document.createElement("video");
+    video2.src = "https://raw.githubusercontent.com/sutphat/interactive-graphics/main/testmodel2.mp4";
+    video2.loop = true; video2.muted = true; video2.playsInline = true; video2.crossOrigin = "anonymous";
+    video2.play().catch(() => { window.addEventListener("click", () => { video2.play(); }, { once: true }); });
+    const videoTexture2 = new THREE.VideoTexture(video2);
+    videoTexture2.encoding = THREE.sRGBEncoding; videoTexture2.wrapS = THREE.RepeatWrapping; videoTexture2.wrapT = THREE.RepeatWrapping;
+    videoTexture2.repeat.set(1, -1); videoTexture2.center.set(0.5, 0.5);
+    const tvMat2 = new THREE.MeshBasicMaterial({ map: videoTexture2, toneMapped: false });
+    const tv2Obj = model.getObjectByName("tv2") || model.getObjectByName("TV2");
+    if(tv2Obj){ tv2Obj.traverse(child => { if(child.isMesh) child.material = tvMat2; }); }
+
+    // จอ TV 3
+    const video3 = document.createElement("video");
+    video3.src = "https://raw.githubusercontent.com/sutphat/interactive-graphics/main/testmodel.mp4";
+    video3.loop = true; video3.muted = true; video3.playsInline = true; video3.crossOrigin = "anonymous";
+    video3.play().catch(() => { window.addEventListener("click", () => { video3.play(); }, { once: true }); });
+    const videoTexture3 = new THREE.VideoTexture(video3);
+    videoTexture3.center.set(0.5, 0.5); videoTexture3.rotation = Math.PI; videoTexture3.encoding = THREE.sRGBEncoding;
+    const tvMat3 = new THREE.MeshBasicMaterial({ map: videoTexture3, toneMapped: false });
+    const tv3Obj = model.getObjectByName("tv3") || model.getObjectByName("TV3");
+    if(tv3Obj){ tv3Obj.traverse(child => { if(child.isMesh) child.material = tvMat3; }); }
+}
+
+// ==========================================
+// 8. การวาด Canvas Dynamic Texture (TV 4)
+// ==========================================
+function createTV4CanvasTexture(imgElement){
+    const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    
+    // วาดพื้นหลังฉากหลังและเส้นกรอบสีทอง
+    ctx.fillStyle = '#0a0a0c'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 14; ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+    
+    // ถ้ารูปโปรไฟล์โหลดเสร็จแล้ว ให้วาดลงฝั่งซ้ายของ Canvas
+    if(imgElement && imgElement.complete && imgElement.naturalWidth !== 0){
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.strokeRect(36, 36, 408, 440);
+        ctx.drawImage(imgElement, 40, 40, 400, 432);
+    } else {
+        ctx.fillStyle = '#1e1e24'; ctx.fillRect(40, 40, 400, 432);
+        ctx.fillStyle = '#ffd700'; ctx.font = 'bold 30px Arial'; ctx.textAlign = 'center'; ctx.fillText('MY PHOTO', 240, 260);
+    }
+    
+    // เขียนข้อความรายละเอียดข้อมูลส่วนตัวลงฝั่งขวาของ Canvas
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 32px Arial'; ctx.fillText('PROFILE INFO', 470, 30);
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(470, 70); ctx.lineTo(970, 70); ctx.stroke();
+    
+    const infoText = [
+        { label: 'NAME:', val: 'Sutphat Lapsirivong' },
+        { label: 'ID:', val: '6721601567' },
+        { label: 'MAJOR:', val: 'COMPUTER SCIENCE' },
+        { label: 'FACULTY:', val: 'Liberal Arts and Science' },
+        { label: 'UNIVERSITY:', val: 'Kasetsart University (KPS)' }
+    ];
+    let startY = 82;
+    infoText.forEach((item) => {
+        ctx.fillStyle = '#00ffcc'; ctx.font = 'bold 18px Arial'; ctx.fillText(item.label, 470, startY);
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 20px Arial'; ctx.fillText(item.val, 470, startY + 22);
+        startY += 76;
+    });
+    
+    // แปลง HTML5 Canvas ให้เป็น CanvasTexture สำหรับ Three.js
+    const texture = new THREE.CanvasTexture(canvas); 
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+}
+
+// แปะ Texture ของ Canvas เข้าไปที่โมเดล TV4
+function attachPortfolioToTV4(model){
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.src = 'https://raw.githubusercontent.com/sutphat/interactive-graphics/main/me.jpg';
+
+    // ค้นหาวัตถุ TV4 และเพิ่มลงในอาร์เรย์ pickables (เพื่อให้ยิง Raycaster คลิกได้)
+    const targetTV = model.getObjectByName("tv4") || model.getObjectByName("TV4");
+
+    if (targetTV) {
+        targetTV.traverse((child) => {
+            if (child.isMesh && !pickables.includes(child)) {
+                pickables.push(child);
+            }
+        });
+    }
+
+    const renderToScreen = () => {
+        const tvTexture = createTV4CanvasTexture(img);
+        tvTexture.wrapS = THREE.RepeatWrapping;
+        tvTexture.wrapT = THREE.RepeatWrapping;
+        tvTexture.repeat.set(1, -1);
+        tvTexture.center.set(0.5, 0.5);
+
+        if (targetTV) {
+            targetTV.traverse((child) => {
+                if (child.isMesh) {
+                    child.material = new THREE.MeshBasicMaterial({
+                        map: tvTexture,
+                        toneMapped: false,
+                        side: THREE.DoubleSide
+                    });
+                    child.material.needsUpdate = true;
+                }
+            });
+        }
+    };
+
+    img.onload = renderToScreen;
+    img.onerror = renderToScreen;
+}
+
+// ==========================================
+// 9. การโหลดโมเดล 3D (GLTF / GLB Loading)
+// ==========================================
+const clock = new THREE.Clock();
+let mixer1, action1, boxerModel1 = null;
+let boxerModel2 = null;
+let totalTime = 0;
+
+// เตรียมใช้ MeshoptDecoder เพื่อคลี่ไฟล์โมเดลที่บีบอัดมา
+MeshoptDecoder.ready.then(() => {
+    const gltfLoader = new THREE.GLTFLoader();
+    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+    const glbUrl = "https://raw.githubusercontent.com/sutphat/interactive-graphics/main/box3.glb";
+    
+    // โหลดโมเดลเวทีมวยหลัก
+    gltfLoader.load(
+        glbUrl,
+        gltf => {
+            const model = gltf.scene;
+            model.traverse(child => {
+                if(child.isMesh){
+                    child.castShadow = true; child.receiveShadow = true;
+                    if(child.material && child.material.map) child.material.map.encoding = THREE.sRGBEncoding;
+                }
+            });
+            scene.add(model);
+            
+            // คำนวณหาจุดศูนย์กลางและขนาดของเวที เพื่อปรับตำแหน่งให้อยู่กลางฉากพอดี
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            model.position.x -= center.x; model.position.y -= center.y; model.position.z -= center.z;
+            
+            // เรียกใช้ฟังก์ชันประกอบฉากต่างๆ
+            addStageLights(model, size);
+            addTVScreens(model);
+            attachPortfolioToTV4(model);
+            create3DProfileText(model, size.y);
+
+            // โหลดโมเดลนักมวย
+            const boxerUrl1 = "https://raw.githubusercontent.com/sutphat/interactive-graphics/main/boxing4.glb";
+            const boxerUrl2 = "https://raw.githubusercontent.com/sutphat/interactive-graphics/main/boxing5.glb";
+            
+            // นักมวยคนที่ 1 (พร้อมเล่น Animation)
+            gltfLoader.load(boxerUrl1, boxerGltf1 => {
+                boxerModel1 = boxerGltf1.scene;
+                boxerModel1.traverse(child => {
+                    if (child.isMesh) {
+                        child.castShadow = true; child.receiveShadow = true;
+                    }
+                });
+                boxerModel1.scale.set(0.2, 0.2, 0.2);
+                boxerModel1.position.set(0, -6.6, -1.9);
+                scene.add(boxerModel1);
+
+                // ตั้งค่า AnimationMixer เพื่อสั่งเล่น Animation ของนักมวยคนที่ 1
+                if(boxerGltf1.animations && boxerGltf1.animations.length > 0){
+                    mixer1 = new THREE.AnimationMixer(boxerModel1);
+                    action1 = mixer1.clipAction(boxerGltf1.animations[0]);
+                    action1.play();
+                }
+            });
+
+            // นักมวยคนที่ 2
+            gltfLoader.load(boxerUrl2, boxerGltf2 => {
+                boxerModel2 = boxerGltf2.scene;
+                boxerModel2.traverse(child => {
+                    if (child.isMesh) {
+                        child.castShadow = true; child.receiveShadow = true;
+                        if (child.material && child.material.map) {
+                            child.material.map.encoding = THREE.sRGBEncoding;
+                        }
+                    }
+                });
+                boxerModel2.scale.set(0.2, 0.2, 0.2);
+                boxerModel2.position.set(0, -6.6, 1.7);
+                boxerModel2.rotation.y = Math.PI; // หมุนหันหน้าเข้าหานักมวยคนที่ 1
+                scene.add(boxerModel2);
+            });
+
+            // คำนวณระยะกล้องให้อยู่ในมุมมองที่เห็นเวทีได้พอดี
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const fov = camera.fov * Math.PI / 180;
+            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 2;
+            camera.position.set(0, maxDim / 2, cameraZ);
+            camera.lookAt(0, 0, 0);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        },
+        undefined,
+        error => { console.error("Error loading file:", error); }
+    );
+
+    // โหลดโมเดลเสริม พร้อมแต่งสไตล์ Cel Shading / Toon Style
+    gltfLoader.load("https://raw.githubusercontent.com/sutphat/interactive-graphics/main/aaaaa.glb",
+        (gltf) => {
+            const model = gltf.scene;
+            model.scale.set(1.5, 1.5, 1.5);
+            model.position.set(4, -8, -4);
+            model.rotation.y = 0;
+
+            // ใช้ MeshToonMaterial ร่วมกับ Gradient แบบเฉียบขาดเพื่อทำ Cel Shading
+            const celMaterial = new THREE.MeshToonMaterial({
+                color: 0x1a365d,
+                gradientMap: createToonGradient()
+            });
+
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    child.material = celMaterial.clone();
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+
+            scene.add(model);
+        },
+        undefined,
+        (error) => console.error("โหลดโมเดลไม่สำเร็จ", error)
+    );
+
+    // สร้าง DataTexture สำหรับไล่ระดับแสงเงาแบบขั้นบันได (Toon Gradient)
+    function createToonGradient() {
+        const data = new Uint8Array([40, 120, 200, 255]);
+        const texture = new THREE.DataTexture(
+            data, 4, 1, THREE.RedFormat
+        );
+        texture.minFilter = THREE.NearestFilter;
+        texture.magFilter = THREE.NearestFilter;
+        texture.generateMipmaps = false;
+        texture.needsUpdate = true;
+        return texture;
+    }
+});
+
+// ==========================================
+// 10. Animation Loop (ลูปเรนเดอร์ภาพเคลื่อนไหว)
+// ==========================================
+function animate(){
+    requestAnimationFrame(animate); // สั่งอัปเดตเฟรมถัดไปเรื่อยๆ
+    
+    const delta = clock.getDelta(); // ระยะเวลาที่ผ่านไประหว่างเฟรม
+    totalTime += delta;
+
+    flagUniforms.uTime.value = totalTime; // อัปเดตเวลาส่งไปยัง Shader ธงชาติไทย
+
+    if(mixer1) mixer1.update(delta); // อัปเดต Animation นักมวย
+    controls.update(); // อัปเดตการควบคุมกล้อง
+    renderer.render(scene, camera); // สั่งเรนเดอร์ภาพลงบนหน้าจอ
+}
+animate(); // เริ่มลูปเรนเดอร์
+
+// ==========================================
+// 11. Event Listeners (หน้าจอ Resize & การคลิก)
+// ==========================================
+// ปรับอัตราส่วนกล้องและเรนเดอร์ตามขนาดหน้าต่างเบราว์เซอร์เมื่อถูก Resize
+window.addEventListener("resize", () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ดักจับการคลิกบน Canvas 3D
+renderer.domElement.addEventListener("click", onPick);
+
+// ระบบ Raycasting ซูมกล้องเข้าไปยัง TV4 เมื่อถูกคลิก
+function onPick(e) {
+    const rect = renderer.domElement.getBoundingClientRect();
+
+    // แปลงพิกัดการคลิกเมาส์เป็นพิกัด Normalized Device Coordinates (-1 ถึง 1)
+    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    // ยิงลำแสงจากมุมกล้องไปยังพิกัดเมาส์ที่คลิก
+    raycaster.setFromCamera(pointer, camera);
+
+    // ตรวจสอบวัตถุใน pickables ที่ตัดกับลำแสง
+    const hit = raycaster.intersectObjects(pickables, false)[0];
+
+    if (!hit) return;
+
+    // หาตำแหน่งในโลก 3D (World Position) ของ TV4
+    const target = new THREE.Vector3();
+    hit.object.getWorldPosition(target);
+
+    // คำนวณเวกเตอร์ทิศทางจากตำแหน่งกล้องไปยังเป้าหมาย
+    const direction = new THREE.Vector3()
+        .subVectors(camera.position, target)
+        .normalize();
+
+    const distance = 4.5; // กำหนดระยะห่างกล้องหลังซูมเข้า
+
+    // ขยับกล้องไปข้างหน้าจอนั้นและเปลี่ยนเป้าหมายโฟกัส
+    camera.position.copy(
+        target.clone().add(direction.multiplyScalar(distance))
+    );
+
+    controls.target.copy(target);
+    controls.update();
+}
+</script>
+</body>
+</html>
