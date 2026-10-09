@@ -2,61 +2,86 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Boxing Stage</title>
+
 <style>
-  body {
-    margin: 0;   
-    overflow: hidden;  
+body {
+    margin: 0;
+    overflow: hidden;
     background: #111;
     user-select: none;
-  }
+}
+canvas {
+    display: block;
+}
+
+.info-overlay {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    color: #FFD54F;
+    font-size: 24px;
+    font-weight: bold;
+    z-index: 1000;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+    pointer-events: none;
+}
 </style>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/meshoptimizer@0.18.1/meshopt_decoder.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FontLoader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/TextGeometry.js"></script>
 </head>
+
 <body>
+<div class="info-overlay">
+    คลิกตรงหน้าทีวี PROFILE INFO เพื่อซูม / หมุนลูกกลิ้งเมาส์เพื่อเลื่อนออก
+</div>
 
 <script>
-//ตัวเรนเดอร์ภาพ 
-const renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(window.innerWidth,window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
-renderer.outputEncoding=THREE.sRGBEncoding;
-renderer.shadowMap.enabled=true;
-renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
-//สร้างฉากสามมิติ
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x111111);
-//มุมกล้อง
-const camera=new THREE.PerspectiveCamera(45,window.innerWidth/window.innerHeight,0.1,1000);
-camera.position.set(0,5,10);
-//ควยคุมกล้องด้วยเม้าส์
-const controls=new THREE.OrbitControls(camera,renderer.domElement);
-controls.enableDamping=true;
-controls.dampingFactor=0.05;
-//ซูมเข้า
+
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+
+//กล้อง
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 5, 10);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+
+//ระบบตรวจจับการคลิก
 const pickables = [];
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
-// แสงพื้นฐาน
-const ambientLight=new THREE.AmbientLight(0xffffff,0.4);
-scene.add(ambientLight);
-const dirLight=new THREE.DirectionalLight(0xffffff,0.8);
-dirLight.position.set(5,12,8);
-dirLight.castShadow=true;
+//แสงสว่าง
+scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(5, 12, 8);
+dirLight.castShadow = true;
 scene.add(dirLight);
-const fillLight=new THREE.DirectionalLight(0xffffff,0.2);
-fillLight.position.set(-5,6,-5);
+
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.2);
+fillLight.position.set(-5, 6, -5);
 scene.add(fillLight);
 
-// ธงชาติไทยพริ้วไหว (Vertex & Fragment Shader)
+//ธงชาติไทยพริ้วไหว
 const flagUniforms = { uTime: { value: 0 } };
+
 const flagMaterial = new THREE.ShaderMaterial({
     uniforms: flagUniforms,
     vertexShader: `
@@ -65,192 +90,168 @@ const flagMaterial = new THREE.ShaderMaterial({
         void main() {
             vUv = uv;
             vec3 newPosition = position;
-            // คำนวณคลื่นพริ้วไหวตามแนวแกน X และเวลา uTime
             float wave = sin(position.x * 3.0 + uTime * 5.0) * 0.25 * uv.x;
             newPosition.z += wave;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
         }
     `,
     fragmentShader: `
+        uniform float uTime;
         varying vec2 vUv;
         void main() {
-            // สร้างลายธงชาติไทย 5 แถบ (แดง-ขาว-น้ำเงิน-ขาว-แดง)
-            vec3 color = vec3(0.8, 0.1, 0.1); // แถบล่าง: แดง
-            
-            if(vUv.y > 0.166) {
-                color = vec3(1.0, 1.0, 1.0); // แถบที่ 2: ขาว
-            }
-            if(vUv.y > 0.333 && vUv.y < 0.666) {
-                color = vec3(0.1, 0.15, 0.5); // แถบกลาง: น้ำเงิน (กว้าง 2 เท่า)
-            }
-            if(vUv.y >= 0.666) {
-                color = vec3(1.0, 1.0, 1.0); // แถบที่ 4: ขาว
-            }
-            if(vUv.y >= 0.833) {
-                color = vec3(0.8, 0.1, 0.1); // แถบบน: แดง
-            }
-            
-            gl_FragColor = vec4(color, 1.0);
+            vec3 baseColor;
+            if (vUv.y < 0.1667) baseColor = vec3(0.8, 0.0, 0.0);
+            else if (vUv.y < 0.3333) baseColor = vec3(1.0, 1.0, 1.0);
+            else if (vUv.y < 0.6667) baseColor = vec3(0.05, 0.12, 0.4);
+            else if (vUv.y < 0.8333) baseColor = vec3(1.0, 1.0, 1.0);
+            else baseColor = vec3(0.8, 0.0, 0.0);
+
+            float light = 0.65 + 0.35 * sin(vUv.x * 12.0 + uTime * 3.0);
+            gl_FragColor = vec4(baseColor * light, 1.0);
         }
     `,
     side: THREE.DoubleSide
 });
 
-function createWavingFlag(x, y, z) { 
-    const flagGroup = new THREE.Group(); 
-    const poleGeo = new THREE.CylinderGeometry(0.05, 0.05, 5, 16); 
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8, roughness: 0.2 }); 
-    const pole = new THREE.Mesh(poleGeo, poleMat); 
-    pole.position.y = 2.5; 
-    flagGroup.add(pole); 
-      
-    const flagGeo = new THREE.PlaneGeometry(2, 1.2, 30, 15);  
-    flagGeo.translate(1, 0, 0);  
-    const flagMesh = new THREE.Mesh(flagGeo, flagMaterial);  
-    flagMesh.position.set(0, 4.2, 0);  
-    flagGroup.add(flagMesh);  
-  
-    flagGroup.position.set(x, y, z);  
-    scene.add(flagGroup);  
-} 
+function createWavingFlag(x, y, z) {
+    const flagGroup = new THREE.Group();
+    const poleGeo = new THREE.CylinderGeometry(0.05, 0.05, 5, 16);
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8, roughness: 0.2 });
+    const pole = new THREE.Mesh(poleGeo, poleMat);
+    pole.position.y = 2.5;
+    flagGroup.add(pole);
 
-// สร้างธงชาติไทยข้างเวที
+    const flagGeo = new THREE.PlaneGeometry(2, 1.2, 30, 15);
+    flagGeo.translate(1, 0, 0);
+
+    const flagMesh = new THREE.Mesh(flagGeo, flagMaterial);
+    flagMesh.position.set(0, 4.2, 0);
+    flagGroup.add(flagMesh);
+
+    flagGroup.position.set(x, y, z);
+    scene.add(flagGroup);
+}
 createWavingFlag(-4, -8, -3);
-//อักษร3D
-function create3DProfileText(parentModel,sizeY){
-    const fontLoader=new THREE.FontLoader();
-    fontLoader.load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json',(font)=>{
-        const textMaterial=new THREE.MeshStandardMaterial({
-            color:0xFFD54F,
-            metalness:0.5,
-            roughness:0.3
-        });
-        const nameGeo=new THREE.TextGeometry('Sutphat Lapsirivong',{ font:font, size:0.6, height:0.1, curveSegments:12, bevelEnabled:true, bevelThickness:0.02, bevelSize:0.015, bevelOffset:0, bevelSegments:3 });
-        const idGeo=new THREE.TextGeometry('ID: 6721601567',{ font:font, size:0.4, height:0.07, curveSegments:12, bevelEnabled:true, bevelThickness:0.015, bevelSize:0.01, bevelOffset:0, bevelSegments:3 });
-        const MajorGeo=new THREE.TextGeometry('MAJOR: COMPUTER SCIENCE',{ font:font, size:0.4, height:0.07, curveSegments:12, bevelEnabled:true, bevelThickness:0.015, bevelSize:0.01, bevelOffset:0, bevelSegments:3 });
-        const FACULTYGeo=new THREE.TextGeometry('FACULTY: Liberal Arts and Science',{ font:font, size:0.4, height:0.07, curveSegments:12, bevelEnabled:true, bevelThickness:0.015, bevelSize:0.01, bevelOffset:0, bevelSegments:3 });
-        const UNIVERSITYGeo=new THREE.TextGeometry('UNIVERSITY: Kasetsart University (KPS)',{ font:font, size:0.4, height:0.07, curveSegments:12, bevelEnabled:true, bevelThickness:0.015, bevelSize:0.01, bevelOffset:0, bevelSegments:3 });
-        nameGeo.center(); idGeo.center(); MajorGeo.center(); FACULTYGeo.center(); UNIVERSITYGeo.center();
-        
-        const nameMesh=new THREE.Mesh(nameGeo,textMaterial); nameMesh.position.set(0,sizeY*0.8+8,0); nameMesh.castShadow=true;
-        const idMesh=new THREE.Mesh(idGeo,textMaterial); idMesh.position.set(0,sizeY*0.8+7,0); idMesh.castShadow=true;
-        const MajorMesh=new THREE.Mesh(MajorGeo,textMaterial); MajorMesh.position.set(0,sizeY*0.8+6,0); MajorMesh.castShadow=true;
-        const FACULTYMesh=new THREE.Mesh(FACULTYGeo,textMaterial); FACULTYMesh.position.set(0,sizeY*0.8+5,0); FACULTYMesh.castShadow=true;
-        const UNIVERSITYMesh=new THREE.Mesh(UNIVERSITYGeo,textMaterial); UNIVERSITYMesh.position.set(0,sizeY*0.8+4,0); UNIVERSITYMesh.castShadow=true;
-        
-        const textGroup=new THREE.Group();
-        textGroup.add(nameMesh, idMesh, MajorMesh, FACULTYMesh, UNIVERSITYMesh);
-        parentModel.add(textGroup);
-    });
-}
 
-function addStageLights(model,size){
-    const stageTarget=new THREE.Object3D();
-    stageTarget.position.set(0,-size.y*0.45,0);
+//ไฟ
+function addStageLights(model, size) {
+    const stageTarget = new THREE.Object3D();
+    stageTarget.position.set(0, -size.y * 0.45, 0);
     model.add(stageTarget);
-    for(let i=1;i<=20;i++){
-        const bulb=model.getObjectByName("Lighting"+i);
-        if(!bulb) continue;
-        bulb.traverse(child=>{
-            if(child.isMesh&&child.material){
-                if(child.material.color) child.material.color.set(0x050505);
-                if(child.material.roughness!==undefined) child.material.roughness=0.8;
-                child.material.needsUpdate=true;
+
+    for (let i = 1; i <= 20; i++) {
+        const bulb = model.getObjectByName("Lighting" + i);
+        if (!bulb) continue;
+
+        bulb.traverse(child => {
+            if (child.isMesh && child.material) {
+                if (child.material.color) child.material.color.set(0x050505);
+                if (child.material.roughness !== undefined) child.material.roughness = 0.8;
+                child.material.needsUpdate = true;
             }
         });
-        const light=new THREE.SpotLight(0xffffff,6,size.y*2.5,Math.PI/8,0.5,1);
-        light.position.set(0,0,0);
+
+        const light = new THREE.SpotLight(0xffffff, 6, size.y * 2.5, Math.PI / 8, 0.5, 1);
+        light.position.set(0, 0, 0);
         bulb.add(light);
-        light.target=stageTarget;
-        light.castShadow=false;
-        bulb.traverse(child=>{
-            if(child.isMesh&&child.material&&child.material.emissive){
+        light.target = stageTarget;
+        light.castShadow = false;
+
+        bulb.traverse(child => {
+            if (child.isMesh && child.material && child.material.emissive) {
                 child.material.emissive.set(0xffffcc);
-                child.material.emissiveIntensity=3;
-                child.material.needsUpdate=true;
+                child.material.emissiveIntensity = 3;
+                child.material.needsUpdate = true;
             }
         });
     }
 }
 
-function addTVScreens(model){
-    const video1=document.createElement("video");
-    video1.src="https://raw.githubusercontent.com/sutphat/interactive-graphics/main/testmodel3.mp4";
-    video1.loop=true; video1.muted=true; video1.playsInline=true; video1.crossOrigin="anonymous";
-    video1.play().catch(()=>{ window.addEventListener("click",()=>{video1.play();},{once:true}); });
-    const videoTexture1=new THREE.VideoTexture(video1);
-    videoTexture1.encoding=THREE.sRGBEncoding; videoTexture1.wrapS=THREE.RepeatWrapping; videoTexture1.wrapT=THREE.RepeatWrapping;
-    videoTexture1.repeat.set(-1,-1); videoTexture1.center.set(0.5,0.5);
-    const tvMat1=new THREE.MeshBasicMaterial({map:videoTexture1,toneMapped:false});
-    const tv1Obj=model.getObjectByName("tv1")||model.getObjectByName("TV1");
-    if(tv1Obj){ tv1Obj.traverse(child=>{ if(child.isMesh) child.material=tvMat1; }); }
+//ทีวีแสดงวิดีโอ1-3
+function addTVScreens(model) {
+    const videos = [
+        { name: "tv1", fallback: "TV1", src: "https://raw.githubusercontent.com/sutphat/interactive-graphics/main/testmodel3.mp4", repeatX: -1, repeatY: -1 },
+        { name: "tv2", fallback: "TV2", src: "https://raw.githubusercontent.com/sutphat/interactive-graphics/main/testmodel2.mp4", repeatX: 1, repeatY: -1 },
+        { name: "tv3", fallback: "TV3", src: "https://raw.githubusercontent.com/sutphat/interactive-graphics/main/testmodel.mp4", repeatX: 1, repeatY: 1 }
+    ];
 
-    const video2=document.createElement("video");
-    video2.src="https://raw.githubusercontent.com/sutphat/interactive-graphics/main/testmodel2.mp4";
-    video2.loop=true; video2.muted=true; video2.playsInline=true; video2.crossOrigin="anonymous";
-    video2.play().catch(()=>{ window.addEventListener("click",()=>{video2.play();},{once:true}); });
-    const videoTexture2=new THREE.VideoTexture(video2);
-    videoTexture2.encoding=THREE.sRGBEncoding; videoTexture2.wrapS=THREE.RepeatWrapping; videoTexture2.wrapT=THREE.RepeatWrapping;
-    videoTexture2.repeat.set(1,-1); videoTexture2.center.set(0.5,0.5);
-    const tvMat2=new THREE.MeshBasicMaterial({map:videoTexture2,toneMapped:false});
-    const tv2Obj=model.getObjectByName("tv2")||model.getObjectByName("TV2");
-    if(tv2Obj){ tv2Obj.traverse(child=>{ if(child.isMesh) child.material=tvMat2; }); }
+    videos.forEach((item, index) => {
+        const video = document.createElement("video");
+        video.src = item.src;
+        video.loop = true; video.muted = true; video.playsInline = true;
+        video.crossOrigin = "anonymous"; video.autoplay = true;
 
-    const video3=document.createElement("video");
-    video3.src="https://raw.githubusercontent.com/sutphat/interactive-graphics/main/testmodel.mp4";
-    video3.loop=true; video3.muted=true; video3.playsInline=true; video3.crossOrigin="anonymous";
-    video3.play().catch(()=>{ window.addEventListener("click",()=>{video3.play();},{once:true}); });
-    const videoTexture3=new THREE.VideoTexture(video3);
-    videoTexture3.center.set(0.5,0.5); videoTexture3.rotation=Math.PI; videoTexture3.encoding=THREE.sRGBEncoding;
-    const tvMat3=new THREE.MeshBasicMaterial({map:videoTexture3,toneMapped:false});
-    const tv3Obj=model.getObjectByName("tv3")||model.getObjectByName("TV3");
-    if(tv3Obj){ tv3Obj.traverse(child=>{ if(child.isMesh) child.material=tvMat3; }); }
+        const tryPlay = () => { video.play().catch(() => {}); };
+        video.play().catch(() => { window.addEventListener("click", tryPlay, { once: true }); });
+
+        const texture = new THREE.VideoTexture(video);
+        texture.encoding = THREE.sRGBEncoding;
+        texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(item.repeatX, item.repeatY);
+
+        if (index === 0 || index === 1) texture.center.set(0.5, 0.5);
+        if (index === 2) { texture.center.set(0.5, 0.5); texture.rotation = Math.PI; }
+
+        const material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false });
+        const tv = model.getObjectByName(item.name) || model.getObjectByName(item.fallback);
+
+        if (tv) {
+            tv.traverse(child => { if (child.isMesh) child.material = material; });
+        }
+    });
 }
 
-function createTV4CanvasTexture(imgElement){
-    const canvas=document.createElement('canvas'); canvas.width=1024; canvas.height=512;
-    const ctx=canvas.getContext('2d');
-    ctx.fillStyle='#0a0a0c'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.strokeStyle='#ffd700'; ctx.lineWidth=14; ctx.strokeRect(10,10,canvas.width-20,canvas.height-20);
-    if(imgElement&&imgElement.complete&&imgElement.naturalWidth!==0){
-        ctx.strokeStyle='#ffffff'; ctx.lineWidth=4; ctx.strokeRect(36,36,408,440);
-        ctx.drawImage(imgElement,40,40,400,432);
-    }else{
-        ctx.fillStyle='#1e1e24'; ctx.fillRect(40,40,400,432);
-        ctx.fillStyle='#ffd700'; ctx.font='bold 30px Arial'; ctx.textAlign='center'; ctx.fillText('MY PHOTO',240,260);
+//PROFILE
+function createTV4CanvasTexture(imgElement) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024; canvas.height = 512;
+    const ctx = canvas.getContext("2d");
+
+    ctx.fillStyle = "#0a0a0c"; ctx.fillRect(0, 0, 1024, 512);
+    ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 14; ctx.strokeRect(10, 10, 1004, 492);
+
+    if (imgElement && imgElement.complete && imgElement.naturalWidth !== 0) {
+        ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 4; ctx.strokeRect(36, 36, 408, 440);
+        ctx.drawImage(imgElement, 40, 40, 400, 432);
+    } else {
+        ctx.fillStyle = "#1e1e24"; ctx.fillRect(40, 40, 400, 432);
+        ctx.fillStyle = "#ffd700"; ctx.font = "bold 30px Arial"; ctx.textAlign = "center";
+        ctx.fillText("MY PHOTO", 240, 260);
     }
-    ctx.textAlign='left'; ctx.textBaseline='top';
-    ctx.fillStyle='#ffd700'; ctx.font='bold 32px Arial'; ctx.fillText('PROFILE INFO',470,30);
-    ctx.strokeStyle='#ffd700'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(470,70); ctx.lineTo(970,70); ctx.stroke();
-    const infoText=[
-        {label:'NAME:',val:'Sutphat Lapsirivong'},
-        {label:'ID:',val:'6721601567'},
-        {label:'MAJOR:',val:'COMPUTER SCIENCE'},
-        {label:'FACULTY:',val:'Liberal Arts and Science'},
-        {label:'UNIVERSITY:',val:'Kasetsart University (KPS)'}
+
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillStyle = "#ffd700"; ctx.font = "bold 32px Arial"; ctx.fillText("PROFILE INFO", 470, 30);
+    ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(470, 70); ctx.lineTo(970, 70); ctx.stroke();
+
+    const infoText = [
+        { label: "NAME:", val: "Sutphat Lapsirivong" },
+        { label: "ID:", val: "6721601567" },
+        { label: "MAJOR:", val: "COMPUTER SCIENCE" },
+        { label: "FACULTY:", val: "Liberal Arts and Science" },
+        { label: "UNIVERSITY:", val: "Kasetsart University (KPS)" }
     ];
-    let startY=82;
-    infoText.forEach((item)=>{
-        ctx.fillStyle='#00ffcc'; ctx.font='bold 18px Arial'; ctx.fillText(item.label,470,startY);
-        ctx.fillStyle='#ffffff'; ctx.font='bold 20px Arial'; ctx.fillText(item.val,470,startY+22);
-        startY+=76;
+
+    let startY = 82;
+    infoText.forEach(item => {
+        ctx.fillStyle = "#00ffcc"; ctx.font = "bold 18px Arial"; ctx.fillText(item.label, 470, startY);
+        ctx.fillStyle = "#ffffff"; ctx.font = "bold 20px Arial"; ctx.fillText(item.val, 470, startY + 22);
+        startY += 76;
     });
-    const texture=new THREE.CanvasTexture(canvas); texture.encoding=THREE.sRGBEncoding;
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.encoding = THREE.sRGBEncoding;
     return texture;
 }
-
-
-function attachPortfolioToTV4(model){
+//รูป
+function attachPortfolioToTV4(model) {
     const img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.src = 'https://raw.githubusercontent.com/sutphat/interactive-graphics/main/me.jpg';
+    img.crossOrigin = "anonymous";
+    img.src = "https://raw.githubusercontent.com/sutphat/interactive-graphics/main/me.jpg";
 
-    // เพิ่ม TV4 เข้าไปในรายการวัตถุที่คลิกได้
-    const targetTV = model.getObjectByName("tv4")
-        || model.getObjectByName("TV4");
+    const targetTV = model.getObjectByName("tv4") || model.getObjectByName("TV4");
 
     if (targetTV) {
-        targetTV.traverse((child) => {
+        targetTV.traverse(child => {
             if (child.isMesh && !pickables.includes(child)) {
                 pickables.push(child);
             }
@@ -259,19 +260,13 @@ function attachPortfolioToTV4(model){
 
     const renderToScreen = () => {
         const tvTexture = createTV4CanvasTexture(img);
-        tvTexture.wrapS = THREE.RepeatWrapping;
-        tvTexture.wrapT = THREE.RepeatWrapping;
-        tvTexture.repeat.set(1, -1);
-        tvTexture.center.set(0.5, 0.5);
+        tvTexture.wrapS = THREE.RepeatWrapping; tvTexture.wrapT = THREE.RepeatWrapping;
+        tvTexture.repeat.set(1, -1); tvTexture.center.set(0.5, 0.5);
 
         if (targetTV) {
-            targetTV.traverse((child) => {
+            targetTV.traverse(child => {
                 if (child.isMesh) {
-                    child.material = new THREE.MeshBasicMaterial({
-                        map: tvTexture,
-                        toneMapped: false,
-                        side: THREE.DoubleSide
-                    });
+                    child.material = new THREE.MeshBasicMaterial({ map: tvTexture, toneMapped: false, side: THREE.DoubleSide });
                     child.material.needsUpdate = true;
                 }
             });
@@ -281,192 +276,205 @@ function attachPortfolioToTV4(model){
     img.onload = renderToScreen;
     img.onerror = renderToScreen;
 }
- 
 
-
-
-const clock=new THREE.Clock();
-let mixer1, action1, boxerModel1 = null;
-let boxerModel2 = null;
+//ตัวแปรแอนิเมชัน
+const clock = new THREE.Clock();
+let mixer1 = null;
+let boxerModel1 = null;
 let totalTime = 0;
 
-MeshoptDecoder.ready.then(()=>{
-    const gltfLoader=new THREE.GLTFLoader();
+MeshoptDecoder.ready.then(() => {
+    const gltfLoader = new THREE.GLTFLoader();
     gltfLoader.setMeshoptDecoder(MeshoptDecoder);
-  //ไฟล์หลัก
-    const glbUrl="https://raw.githubusercontent.com/sutphat/interactive-graphics/main/box3.glb";
-    gltfLoader.load(
-        glbUrl,
-        gltf=>{
-            const model=gltf.scene;
-            model.traverse(child=>{
-                if(child.isMesh){
-                    child.castShadow=true; child.receiveShadow=true;
-                    if(child.material&&child.material.map) child.material.map.encoding=THREE.sRGBEncoding;
-                }
-            });
-            scene.add(model);
-            const box=new THREE.Box3().setFromObject(model);
-            const center=box.getCenter(new THREE.Vector3());
-            const size=box.getSize(new THREE.Vector3());
-            model.position.x-=center.x; model.position.y-=center.y; model.position.z-=center.z;
-            
-            addStageLights(model,size);
-            addTVScreens(model);
-            attachPortfolioToTV4(model);
-            create3DProfileText(model,size.y);
-            //นักมวย1-2
-            const boxerUrl1="https://raw.githubusercontent.com/sutphat/interactive-graphics/main/boxing4.glb";
-            const boxerUrl2="https://raw.githubusercontent.com/sutphat/interactive-graphics/main/boxing5.glb";
-            
-            // นักมวยคนที่ 1 
-            gltfLoader.load(boxerUrl1, boxerGltf1 => {
-                boxerModel1 = boxerGltf1.scene;
-                boxerModel1.traverse(child => {
-                    if (child.isMesh) {
-                        child.castShadow = true;
-                        child.receiveShadow = true;
-                    }
-                });
-                boxerModel1.scale.set(0.2, 0.2, 0.2);
-                boxerModel1.position.set(0, -6.6, -1.9);
-                scene.add(boxerModel1);
+    //โมเดลหลัก
+    const glbUrl = "https://raw.githubusercontent.com/sutphat/interactive-graphics/main/box3.glb";
 
-                if(boxerGltf1.animations && boxerGltf1.animations.length > 0){
-                    mixer1 = new THREE.AnimationMixer(boxerModel1);
-                    action1 = mixer1.clipAction(boxerGltf1.animations[0]);
-                    action1.play();
-                }
-            });
-
-            // นักมวยคนที่ 2 
-            gltfLoader.load(boxerUrl2, boxerGltf2 => {
-                boxerModel2 = boxerGltf2.scene;
-                boxerModel2.traverse(child => {
-                    if (child.isMesh) {
-                        child.castShadow = true;
-                        child.receiveShadow = true;
-                        if (child.material && child.material.map) {
-                            child.material.map.encoding = THREE.sRGBEncoding;
-                        }
-                    }
-                });
-                boxerModel2.scale.set(0.2, 0.2, 0.2);
-                boxerModel2.position.set(0, -6.6, 1.7);
-                boxerModel2.rotation.y = Math.PI;
-
-                scene.add(boxerModel2);
-            });
-
-            const maxDim=Math.max(size.x,size.y,size.z);
-            const fov=camera.fov*Math.PI/180;
-            let cameraZ=Math.abs(maxDim/2/Math.tan(fov/2))*2;
-            camera.position.set(0,maxDim/2,cameraZ);
-            camera.lookAt(0,0,0);
-            controls.target.set(0,0,0);
-            controls.update();
-        },
-        
-        undefined,
-        error=>{console.error("Error loading file:",error);}
-    );
-  //รูปหลายเหลี่ยม cel shading
-  gltfLoader.load("https://raw.githubusercontent.com/sutphat/interactive-graphics/main/aaaaa.glb",
-    (gltf) => {
+    gltfLoader.load(glbUrl, gltf => {
         const model = gltf.scene;
-        model.scale.set(1.5, 1.5, 1.5);
-        model.position.set(4, -7.3, -4);
-        model.rotation.y = 0;
-
-        // Cel Shading
-        const celMaterial = new THREE.MeshToonMaterial({
-            color: 0x1a365d,
-            gradientMap: createToonGradient()
-        });
-
-        model.traverse((child) => {
+        model.traverse(child => {
             if (child.isMesh) {
-                child.material = celMaterial.clone();
-                child.castShadow = true;
-                child.receiveShadow = true;
+                child.castShadow = true; child.receiveShadow = true;
+                if (child.material && child.material.map) child.material.map.encoding = THREE.sRGBEncoding;
+            }
+        });
+        scene.add(model);
+
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+
+        model.position.x -= center.x;
+        model.position.y -= center.y;
+        model.position.z -= center.z;
+
+        addStageLights(model, size);
+        addTVScreens(model);
+        attachPortfolioToTV4(model);
+
+        //นักมวยคนที่1
+        gltfLoader.load("https://raw.githubusercontent.com/sutphat/interactive-graphics/main/boxing4.glb", boxerGltf1 => {
+            boxerModel1 = boxerGltf1.scene;
+            boxerModel1.traverse(child => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } });
+            boxerModel1.scale.set(0.2, 0.2, 0.2);
+            boxerModel1.position.set(0, -6.6, -1.9);
+            scene.add(boxerModel1);
+
+            if (boxerGltf1.animations && boxerGltf1.animations.length > 0) {
+                mixer1 = new THREE.AnimationMixer(boxerModel1);
+                mixer1.clipAction(boxerGltf1.animations[0]).play();
             }
         });
 
+        //นักมวยคนที่2
+        gltfLoader.load("https://raw.githubusercontent.com/sutphat/interactive-graphics/main/boxing5.glb", boxerGltf2 => {
+            const boxerModel2 = boxerGltf2.scene;
+            boxerModel2.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = true; child.receiveShadow = true;
+                    if (child.material && child.material.map) child.material.map.encoding = THREE.sRGBEncoding;
+                }
+            });
+            boxerModel2.scale.set(0.2, 0.2, 0.2);
+            boxerModel2.position.set(0, -6.6, 1.7);
+            boxerModel2.rotation.y = Math.PI;
+            scene.add(boxerModel2);
+        });
+
+        //โมเดลข้อความ3D
+        gltfLoader.load("https://raw.githubusercontent.com/sutphat/interactive-graphics/main/font.glb", gltf => {
+            const fontModel = gltf.scene;
+            fontModel.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = true; child.receiveShadow = true;
+                    child.material = new THREE.MeshStandardMaterial({
+                        color: 0xFFD54F,
+                        metalness: 0.8,
+                        roughness: 0.25
+                    });
+                }
+            });
+            fontModel.scale.set(0.58, 0.58, 0.58);
+            fontModel.position.set(0, 11, 0);
+            scene.add(fontModel);
+        });
+
+        //คำนวณและจัดตำแหน่งกล้องเริ่มต้นให้พอดีกับขนาดเวที
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = camera.fov * Math.PI / 180;
+        const cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 2;
+
+        camera.position.set(0, maxDim / 2, cameraZ);
+        camera.lookAt(0, 0, 0);
+
+        controls.target.set(0, 0, 0);
+        controls.update();
+    });
+
+    //โมเดลหลายเหลี่ยมCEL SHADING
+    gltfLoader.load("https://raw.githubusercontent.com/sutphat/interactive-graphics/main/aaaaa.glb", gltf => {
+        const model = gltf.scene;
+        model.scale.set(1.5, 1.5, 1.5);
+        model.position.set(4, -7.3, -4);
+        const celMaterial = new THREE.MeshToonMaterial({ color: 0x1a365d, gradientMap: createToonGradient() });
+
+        model.traverse(child => {
+            if (child.isMesh) {
+                child.material = celMaterial.clone();
+                child.castShadow = true; child.receiveShadow = true;
+            }
+        });
         scene.add(model);
-    },
-    undefined,
-    (error) => console.error("โหลดโมเดลไม่สำเร็จ", error)
-);
+    });
+});
 
 function createToonGradient() {
     const data = new Uint8Array([40, 120, 200, 255]);
-    const texture = new THREE.DataTexture(
-        data, 4, 1, THREE.RedFormat
-    );
-    texture.minFilter = THREE.NearestFilter;
-    texture.magFilter = THREE.NearestFilter;
-    texture.generateMipmaps = false;
-    texture.needsUpdate = true;
+    const texture = new THREE.DataTexture(data, 4, 1, THREE.RedFormat);
+    texture.minFilter = THREE.NearestFilter; texture.magFilter = THREE.NearestFilter;
+    texture.generateMipmaps = false; texture.needsUpdate = true;
     return texture;
 }
 
-});
-
-           
-          
-
-function animate(){
+//อนิเมะชั่น
+function animate() {
     requestAnimationFrame(animate);
-    
+
     const delta = clock.getDelta();
     totalTime += delta;
 
     flagUniforms.uTime.value = totalTime;
+    if (mixer1) mixer1.update(delta);
 
-    if(mixer1) mixer1.update(delta);
     controls.update();
-    renderer.render(scene,camera);
+    renderer.render(scene, camera);
 }
 animate();
 
-window.addEventListener("resize",()=>{
-    camera.aspect=window.innerWidth/window.innerHeight;
+//ปรับขนาดตามหน้าจอ 
+window.addEventListener("resize", () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth,window.innerHeight);
+    renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+//ซูมสโล
+let cameraZoomAnimation = null;
+
+function smoothZoom(target, distance = 4.5) {
+    if (cameraZoomAnimation !== null) {
+        cancelAnimationFrame(cameraZoomAnimation);
+    }
+
+    const startPosition = camera.position.clone();
+    const startTarget = controls.target.clone();
+
+    const direction = new THREE.Vector3().subVectors(startPosition, target).normalize();
+    const endPosition = target.clone().add(direction.multiplyScalar(distance));
+
+    const duration = 1500;
+    const startTime = performance.now();
+
+    function updateCamera() {
+        const elapsed = performance.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        const eased = progress < 0.5
+            ? 4 * progress * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+        camera.position.lerpVectors(startPosition, endPosition, eased);
+        controls.target.lerpVectors(startTarget, target, eased);
+        controls.update();
+
+        if (progress < 1) {
+            cameraZoomAnimation = requestAnimationFrame(updateCamera);
+        } else {
+            camera.position.copy(endPosition);
+            controls.target.copy(target);
+            controls.update();
+            cameraZoomAnimation = null;
+        }
+    }
+
+    cameraZoomAnimation = requestAnimationFrame(updateCamera);
+}
+
+//ซูมคลิกที่TV4
 renderer.domElement.addEventListener("click", onPick);
 
 function onPick(e) {
     const rect = renderer.domElement.getBoundingClientRect();
-
     pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
     raycaster.setFromCamera(pointer, camera);
-
     const hit = raycaster.intersectObjects(pickables, false)[0];
 
     if (!hit) return;
 
-    // หาตำแหน่ง TV4 ในพิกัดโลก
     const target = new THREE.Vector3();
     hit.object.getWorldPosition(target);
-
-    // หาทิศทางจากกล้องไปยังจอ
-    const direction = new THREE.Vector3()
-        .subVectors(camera.position, target)
-        .normalize();
-
-    // กำหนดระยะห่างกล้องจากจอ
-    const distance = 4.5;
-
-    // สั่งกล้องซูมเข้าไปยังจอ
-    camera.position.copy(
-        target.clone().add(direction.multiplyScalar(distance))
-    );
-
-    controls.target.copy(target);
-    controls.update();
+    smoothZoom(target, 4.5);
 }
 </script>
 </body>
